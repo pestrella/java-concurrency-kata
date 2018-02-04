@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 
 import static java.lang.String.format;
-import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static java.util.stream.Collectors.toList;
 
 public class Core {
@@ -16,27 +16,39 @@ public class Core {
 
     public List<Integer> multiply(List<Integer> numbers) {
         return numbers.stream()
-                .map(n -> {
-                    printThreadName();
-                    return n * service.loadNumber();
-                })
+                .map(doMultiply())
                 .collect(toList());
     }
 
-    private final ExecutorService exec = Executors.newFixedThreadPool(10);
-
     public List<Integer> multiplyConcurrent(List<Integer> numbers) {
         List<CompletableFuture<Integer>> futures = numbers.stream()
-                .map(n -> supplyAsync(() -> n))
-                .map(cf -> cf.thenApplyAsync(n -> {
-                    printThreadName();
-                    return n * service.loadNumber();
-                }, exec))
+                .map(supplyAsync())
+                .map(thenApply(doMultiply()))
                 .collect(toList());
 
         return futures.stream()
                 .map(CompletableFuture::join)
                 .collect(toList());
+    }
+
+    private final ExecutorService exec = Executors.newFixedThreadPool(20);
+
+    public List<Integer> multiplyWithExecutor(List<Integer> numbers) {
+        List<CompletableFuture<Integer>> futures = numbers.stream()
+                .map(supplyAsync())
+                .map(thenApply(doMultiply(), exec))
+                .collect(toList());
+
+        return futures.stream()
+                .map(CompletableFuture::join)
+                .collect(toList());
+    }
+
+    private Function<Integer, Integer> doMultiply() {
+        return n -> {
+            printThreadName();
+            return n * service.loadNumber();
+        };
     }
 
     private static void printThreadName() {
@@ -45,5 +57,19 @@ public class Core {
 
     private static String now() {
         return DateTimeFormatter.ISO_TIME.format(ZonedDateTime.now());
+    }
+
+    private static <T> Function<T, CompletableFuture<T>> supplyAsync() {
+        return t -> CompletableFuture.supplyAsync(() -> t);
+    }
+
+    private static <T, R> Function<CompletableFuture<T>, CompletableFuture<R>> thenApply(Function<T, R> f) {
+        return completableFuture -> completableFuture.thenApply(f);
+    }
+
+    private static <T, R> Function<CompletableFuture<T>, CompletableFuture<R>> thenApply(
+            Function<T, R> f,
+            ExecutorService exec) {
+        return completableFuture -> completableFuture.thenApplyAsync(f, exec);
     }
 }

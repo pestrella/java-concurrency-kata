@@ -7,26 +7,30 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 
-import static org.junit.Assert.assertTrue;
-
 public class ServiceTest {
-    @Test
-    public void testRandom() {
-        Service service = new Service();
-        Integer n = service.loadNumber();
-        System.out.println("n = " + n);
-        assertTrue(n < 1000);
-    }
+    private Core core = new Core();
 
     @Test
     public void testMultiply() {
-        Core core = new Core();
-        runMultiply(core::multiply);
-        runMultiply(core::multiplyConcurrent);
+        println("Synchronous test:");
+        runMultiply(core::multiply, 5);
     }
 
-    private static void runMultiply(Function<List<Integer>, List<Integer>> multiply) {
-        List<Integer> numbers = randomNumbers(10, 20);
+    @Test
+    public void testMultiplyConcurrent() {
+        println("Concurrency test:");
+        runMultiply(core::multiplyConcurrent, 50);
+
+        println("Concurrency test with thread pool:");
+        runMultiply(core::multiplyWithExecutor, 50);
+    }
+
+    private static void println(Object o) {
+        System.out.println(o);
+    }
+
+    private static void runMultiply(Function<List<Integer>, List<Integer>> multiply, int n) {
+        List<Integer> numbers = randomNumbers(n, 20);
         long start = System.currentTimeMillis();
         List<Integer> answers = multiply.apply(numbers);
         long elapsed = System.currentTimeMillis() - start;
